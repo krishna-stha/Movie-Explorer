@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cinescope — Movie Explorer</title>
+
+<!-- Fonts: Bebas Neue = condensed "marquee" display face, Work Sans = clean body face -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- React + ReactDOM + Babel (so we can write real JSX in-browser) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+
+<style>
+  /* ============================================================
+     COLOR SYSTEM — exactly 4 colors, defined once as CSS variables.
+     Every other color reference in this file should point back here.
+     Theme: an old-fashioned film marquee on warm paper stock.
+     ============================================================ */
+  :root {
+    --color-ink:      #1C1B19; /* near-black — body text, nav, footer bg */
+    --color-paper:    #F3ECE1; /* warm cream — page background */
+    --color-gold:     #B8892E; /* marquee gold — accents, ratings, hover states */
+    --color-marquee:  #7A2E2E; /* deep marquee red — primary CTA, active nav link */
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; } /* fallback smooth scroll; JS also handles it explicitly */
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: 'Work Sans', sans-serif;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, .display {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-weight: 400;
+    margin: 0;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- Sprocket-hole strip: the site's signature motif ----------
+     A row of little "film reel" holes, used as a divider between
+     sections. Reused a few times so it feels like a running film strip
+     threading the whole page together, rather than a one-off decoration. */
+  .film-strip {
+    height: 22px;
+    background-color: var(--color-ink);
+    background-image: radial-gradient(circle, var(--color-paper) 5px, transparent 5.5px);
+    background-size: 34px 22px;
+    background-position: 17px center;
+    background-repeat: repeat-x;
+  }
+
+  /* ---------------------- NAVIGATION ---------------------- */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 6vw;
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  .nav-logo {
+    font-size: 26px;
+    color: var(--color-paper);
+  }
+  .nav-logo span { color: var(--color-gold); } /* the "scope" half of the wordmark */
+
+  .nav-links {
+    list-style: none;
+    display: flex;
+    gap: 28px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav-links button {
+    background: none;
+    border: none;
+    color: var(--color-paper);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: 6px 2px;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .nav-links button:hover,
+  .nav-links button:focus-visible {
+    color: var(--color-gold);
+    border-bottom-color: var(--color-gold);
+    outline: none;
+  }
+
+  .nav-links button.active {
+    color: var(--color-marquee);
+    border-bottom-color: var(--color-marquee);
+  }
+
+  /* ---------------------- SHARED SECTION LAYOUT ---------------------- */
+  section {
+    padding: 90px 6vw;
+    max-width: 1100px;
+    margin: 0 auto;
+    scroll-margin-top: 70px; /* keeps content clear of the sticky nav when scrolled to */
+  }
+
+  .eyebrow {
+    font-family: 'Bebas Neue', sans-serif;
+    color: var(--color-marquee);
+    letter-spacing: 0.18em;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  /* ---------------------- HOME / SEARCH ---------------------- */
+  #home { padding-top: 70px; }
+
+  .hero-title {
+    font-size: clamp(48px, 9vw, 96px);
+    line-height: 0.95;
+  }
+  .hero-title span { color: var(--color-marquee); }
+
+  .hero-sub {
+    max-width: 560px;
+    margin-top: 18px;
+    color: var(--color-ink);
+    opacity: 0.75;
+    font-size: 17px;
+  }
+
+  .search-form {
+    margin-top: 40px;
+    display: flex;
+    gap: 12px;
+    max-width: 560px;
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    flex: 1 1 320px;
+    padding: 16px 18px;
+    font-size: 16px;
+    font-family: 'Work Sans', sans-serif;
+    border: 2px solid var(--color-ink);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    border-radius: 2px;
+  }
+  .search-input::placeholder { color: var(--color-ink); opacity: 0.45; }
+  .search-input:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 1px; }
+
+  .search-button {
+    padding: 16px 30px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.06em;
+    background: var(--color-marquee);
+    color: var(--color-paper);
+    border: 2px solid var(--color-marquee);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .search-button:hover:not(:disabled) { background: var(--color-ink); border-color: var(--color-ink); }
+  .search-button:active:not(:disabled) { transform: scale(0.97); }
+  .search-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status-line {
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .status-line.error { color: var(--color-marquee); font-weight: 600; }
+
+  /* ---------------------- RESULT CARD ---------------------- */
+  .result-card {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 36px;
+    border-top: 3px solid var(--color-ink);
+    padding-top: 36px;
+  }
+
+  .poster-wrap {
+    width: 220px;
+    height: 326px;
+    background: var(--color-ink);
+    border: 6px solid var(--color-ink);
+    overflow: hidden;
+  }
+  .poster-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .poster-fallback {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-paper);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    text-align: center;
+    padding: 10px;
+  }
+
+  .result-title { font-size: clamp(30px, 4vw, 44px); }
+  .result-meta {
+    margin-top: 6px;
+    font-size: 14px;
+    color: var(--color-ink);
+    opacity: 0.65;
+  }
+  .result-meta span:not(:last-child)::after { content: "  •  "; }
+
+  .badge-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    border: 2px solid var(--color-gold);
+    color: var(--color-ink);
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 2px;
+    background: rgba(184, 137, 46, 0.1); /* gold at low opacity — stays within the 4-color set */
+  }
+  .badge b { color: var(--color-marquee); }
+
+  .result-plot {
+    margin-top: 22px;
+    font-size: 15.5px;
+    max-width: 65ch;
+  }
+
+  .result-credits {
+    margin-top: 16px;
+    font-size: 13.5px;
+    opacity: 0.7;
+  }
+  .result-credits div { margin-top: 3px; }
+
+  /* ---------------------- REVIEWS ---------------------- */
+  .reviews-block { margin-top: 40px; }
+  .reviews-heading {
+    font-size: 20px;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid var(--color-ink);
+    padding-bottom: 8px;
+    margin-bottom: 18px;
+  }
+  .review-card {
+    border-left: 4px solid var(--color-gold);
+    padding: 4px 0 4px 16px;
+    margin-bottom: 18px;
+  }
+  .review-author {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-size: 15px;
+    color: var(--color-marquee);
+  }
+  .review-text { font-size: 14.5px; margin-top: 4px; opacity: 0.85; }
+  .reviews-empty-note {
+    font-size: 13.5px;
+    opacity: 0.6;
+    border: 1px dashed var(--color-ink);
+    padding: 14px 16px;
+  }
+
+  /* ---------------------- ABOUT ---------------------- */
+  .about-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 50px;
+    margin-top: 26px;
+  }
+  .about-copy { max-width: 50ch; font-size: 15.5px; }
+  .about-copy p { margin: 0 0 16px; }
+
+  .about-list { list-style: none; margin: 0; padding: 0; }
+  .about-list li {
+    padding: 14px 0;
+    border-top: 1px solid rgba(28,27,25,0.15);
+    font-size: 15px;
+  }
+  .about-list li:last-child { border-bottom: 1px solid rgba(28,27,25,0.15); }
+  .about-list b { color: var(--color-marquee); font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em; font-size: 15px; }
+
+  /* ---------------------- SOCIALS ---------------------- */
+  .socials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 22px;
+    margin-top: 30px;
+  }
+
+  /* Each social link styled like a torn ticket stub */
+  .ticket {
+    position: relative;
+    display: block;
+    text-decoration: none;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 26px 22px;
+    border-radius: 3px;
+    transition: transform 0.15s ease;
+  }
+  .ticket:hover { transform: translateY(-4px); }
+  .ticket::after {
+    content: "";
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 0;
+    border-left: 2px dashed var(--color-paper);
+    opacity: 0.35;
+  }
+  .ticket-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    color: var(--color-gold);
+  }
+  .ticket-handle { font-size: 13.5px; opacity: 0.75; margin-top: 4px; }
+
+  /* ---------------------- FOOTER ---------------------- */
+  footer {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    text-align: center;
+    padding: 26px;
+    font-size: 13px;
+    opacity: 0.7;
+  }
+
+  @media (max-width: 720px) {
+    .nav { padding: 16px 5vw; }
+    .nav-links { gap: 16px; }
+    .result-card { grid-template-columns: 1fr; }
+    .poster-wrap { width: 160px; height: 236px; }
+    .about-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+/* ============================================================
+   API CONFIGURATION
+   ------------------------------------------------------------
+   OMDb (https://www.omdbapi.com) supplies poster, plot, and the
+   Ratings array (IMDb / Rotten Tomatoes / Metacritic). It does NOT
+   provide written review text.
+
+   TMDB (https://www.themoviedb.org/documentation/api) is used
+   separately, best-effort, to pull real written "top reviews" —
+   OMDb has no equivalent endpoint. If no TMDB key is supplied the
+   reviews section simply shows a friendly note instead of erroring.
+
+   Get a free OMDb key at: https://www.omdbapi.com/apikey.aspx
+   Get a free TMDB key at: https://www.themoviedb.org/settings/api
+   ============================================================ */
+const OMDB_API_KEY = "http://www.omdbapi.com/?i=tt3896198&apikey=dadfc58";   // <-- required: paste your OMDb key here
+const TMDB_API_KEY  = "";                    // <-- optional: paste your TMDB key to enable reviews
+
+const NAV_ITEMS = [
+  { id: "home", label: "Home" },
+  { id: "about", label: "About" },
+  { id: "socials", label: "Socials" },
+];
+
+/* ---------------------- Navigation bar ----------------------
+   Clicking a link smooth-scrolls to the matching section id
+   instead of jumping there instantly. */
+function Nav({ activeSection, onNavigate }) {
+  return (
+    <nav className="nav">
+      <div className="nav-logo display">CINE<span>SCOPE</span></div>
+      <ul className="nav-links">
+        {NAV_ITEMS.map((item) => (
+          <li key={item.id}>
+            <button
+              className={activeSection === item.id ? "active" : ""}
+              onClick={() => onNavigate(item.id)}
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/* ---------------------- Rating badges ----------------------
+   OMDb returns a "Ratings" array like:
+   [{ Source: "Internet Movie Database", Value: "8.8/10" }, ...]
+   We map the known sources to short labels for display. */
+function RatingBadges({ ratings }) {
+  if (!ratings || ratings.length === 0) return null;
+  const shortLabel = (source) => {
+    if (source.includes("Internet Movie")) return "IMDb";
+    if (source.includes("Rotten")) return "Rotten Tomatoes";
+    if (source.includes("Metacritic")) return "Metacritic";
+    return source;
+  };
+  return (
+    <div className="badge-row">
+      {ratings.map((r) => (
+        <div className="badge" key={r.Source}>
+          {shortLabel(r.Source)}: <b>{r.Value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------- Reviews block ----------------------
+   Best-effort fetch from TMDB. Shows up to 3 reviews, trimmed
+   to a readable length. Falls back to a plain note if no TMDB
+   key is configured or none are found. */
+function ReviewsBlock({ reviews, reviewsLoading }) {
+  return (
+    <div className="reviews-block">
+      <div className="reviews-heading display">TOP REVIEWS</div>
+      {reviewsLoading && <p className="status-line">Fetching reviews…</p>}
+      {!reviewsLoading && reviews.length === 0 && (
+        <div className="reviews-empty-note">
+          No written reviews to show yet. Add a TMDB API key in the code
+          (TMDB_API_KEY) to pull in real audience reviews for this title.
+        </div>
+      )}
+      {!reviewsLoading &&
+        reviews.slice(0, 3).map((rev, i) => (
+          <div className="review-card" key={i}>
+            <div className="review-author">{rev.author}</div>
+            <div className="review-text">
+              {rev.content.length > 320
+                ? rev.content.slice(0, 320).trim() + "…"
+                : rev.content}
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/* ---------------------- Home / search section ---------------------- */
+function HomeSection({ sectionRef }) {
+  const [query, setQuery] = useState("");
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  // Pulls poster / ratings / plot / credits from OMDb by exact title
+  const fetchMovie = async (title) => {
+    const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}&plot=full`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.Response === "False") {
+      throw new Error(data.Error || "Movie not found.");
+    }
+    return data;
+  };
+
+  // Best-effort: TMDB search-by-title -> reviews-by-id. Silently no-ops
+  // (empty array) if no key is set or nothing is found.
+  const fetchReviews = async (title) => {
+    if (!TMDB_API_KEY) return [];
+    try {
+      const searchRes = await fetch(
+        `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
+      );
+      const searchData = await searchRes.json();
+      const first = searchData.results && searchData.results[0];
+      if (!first) return [];
+      const reviewRes = await fetch(
+        `https://api.themoviedb.org/3/movie/${first.id}/reviews?api_key=${TMDB_API_KEY}`
+      );
+      const reviewData = await reviewRes.json();
+      return reviewData.results || [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    setLoading(true);
+    setError("");
+    setMovie(null);
+    setReviews([]);
+
+    try {
+      const data = await fetchMovie(query.trim());
+      setMovie(data);
+      setReviewsLoading(true);
+      const revs = await fetchReviews(query.trim());
+      setReviews(revs);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+      setReviewsLoading(false);
+    }
+  };
+
+  return (
+    <section id="home" ref={sectionRef}>
+      <div className="eyebrow">NOW SEARCHING</div>
+      <h1 className="hero-title">FIND ANY <span>MOVIE.</span></h1>
+      <p className="hero-sub">
+        Type in a title to pull its poster, ratings, synopsis, and top
+        reviews — all in one place.
+      </p>
+
+      <form className="search-form" onSubmit={handleSubmit}>
+        <input
+          className="search-input"
+          type="text"
+          placeholder="e.g. The Godfather"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Movie title"
+        />
+        <button className="search-button" type="submit" disabled={loading}>
+          {loading ? "Searching…" : "Submit"}
+        </button>
+      </form>
+
+      {error && <p className="status-line error">{error}</p>}
+      {OMDB_API_KEY === "YOUR_OMDB_API_KEY" && (
+        <p className="status-line">
+          Note: add your free OMDb API key to the OMDB_API_KEY constant in
+          the code before searching.
+        </p>
+      )}
+
+      {movie && (
+        <div className="result-card">
+          <div className="poster-wrap">
+            {movie.Poster && movie.Poster !== "N/A" ? (
+              <img src={movie.Poster} alt={`${movie.Title} poster`} />
+            ) : (
+              <div className="poster-fallback">NO POSTER AVAILABLE</div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="result-title display">{movie.Title}</h2>
+            <div className="result-meta">
+              <span>{movie.Year}</span>
+              <span>{movie.Runtime}</span>
+              <span>{movie.Genre}</span>
+              <span>{movie.Rated}</span>
+            </div>
+
+            <RatingBadges ratings={movie.Ratings} />
+
+            <p className="result-plot">{movie.Plot}</p>
+
+            <div className="result-credits">
+              <div><strong>Director:</strong> {movie.Director}</div>
+              <div><strong>Cast:</strong> {movie.Actors}</div>
+            </div>
+
+            <ReviewsBlock reviews={reviews} reviewsLoading={reviewsLoading} />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------------------- About section ---------------------- */
+function AboutSection({ sectionRef }) {
+  return (
+    <section id="about" ref={sectionRef}>
+      <div className="eyebrow">ABOUT THE PROJECT</div>
+      <h2 className="hero-title" style={{ fontSize: "clamp(34px, 5vw, 56px)" }}>
+        WHAT CINESCOPE DOES
+      </h2>
+      <div className="about-grid">
+        <div className="about-copy">
+          <p>
+            Cinescope is a single-purpose lookup tool: type a movie title,
+            and it gathers the poster, the plot, critic ratings, and a
+            handful of written reviews so you don't have to open five tabs
+            to decide what to watch.
+          </p>
+          <p>
+            Movie data and ratings come from OMDb. Written audience reviews,
+            when available, come from TMDB. Nothing is stored — every search
+            is a fresh request straight to those sources.
+          </p>
+        </div>
+        <ul className="about-list">
+          <li><b>POSTER</b> — official artwork for the title, pulled from OMDb.</li>
+          <li><b>RATINGS</b> — IMDb, Rotten Tomatoes, and Metacritic scores side by side.</li>
+          <li><b>SYNOPSIS</b> — full plot description, not just a one-liner.</li>
+          <li><b>REVIEWS</b> — real written reviews, sourced from TMDB.</li>
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------- Socials section ---------------------- */
+function SocialsSection({ sectionRef }) {
+  // Replace these href values with real profile links.
+  const links = [
+    { label: "GitHub", handle: "@yourusername", href: "https://github.com/" },
+    { label: "X / Twitter", handle: "@yourusername", href: "https://x.com/" },
+    { label: "LinkedIn", handle: "/in/yourusername", href: "https://linkedin.com/" },
+  ];
+  return (
+    <section id="socials" ref={sectionRef}>
+      <div className="eyebrow">FIND US ELSEWHERE</div>
+      <h2 className="hero-title" style={{ fontSize: "clamp(34px, 5vw, 56px)" }}>
+        SOCIALS
+      </h2>
+      <div className="socials-grid">
+        {links.map((l) => (
+          <a className="ticket" href={l.href} key={l.label} target="_blank" rel="noreferrer">
+            <div className="ticket-label display">{l.label}</div>
+            <div className="ticket-handle">{l.handle}</div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------- Root App ---------------------- */
+function App() {
+  const [activeSection, setActiveSection] = useState("home");
+  const homeRef = useRef(null);
+  const aboutRef = useRef(null);
+  const socialsRef = useRef(null);
+
+  const refs = { home: homeRef, about: aboutRef, socials: socialsRef };
+
+  // Smooth-scrolls to the target section when a nav link is clicked
+  const handleNavigate = useCallback((id) => {
+    setActiveSection(id);
+    refs[id].current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  return (
+    <React.Fragment>
+      <Nav activeSection={activeSection} onNavigate={handleNavigate} />
+
+      <HomeSection sectionRef={homeRef} />
+      <div className="film-strip"></div>
+
+      <AboutSection sectionRef={aboutRef} />
+      <div className="film-strip"></div>
+
+      <SocialsSection sectionRef={socialsRef} />
+
+      <footer>Cinescope — built with React. Movie data via OMDb, reviews via TMDB.</footer>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
