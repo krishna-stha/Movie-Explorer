@@ -1,693 +1,731 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Cinescope — Movie Explorer</title>
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MOVIEXPLORER</title>
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="https://cdn-icons-png.flaticon.com/512/168/168864.png"
+    />
 
-<!-- Fonts: Bebas Neue = condensed "marquee" display face, Work Sans = clean body face -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Fonts: Bebas Neue = condensed "marquee" display face, Work Sans = clean body face -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
-<!-- React + ReactDOM + Babel (so we can write real JSX in-browser) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
-
-<style>
-  /* ============================================================
-     COLOR SYSTEM — exactly 4 colors, defined once as CSS variables.
-     Every other color reference in this file should point back here.
+    <!-- Tailwind CSS (Play CDN — compiles utility classes, including arbitrary
+     values, directly in the browser, so no build step is needed). -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      /* ============================================================
+     COLOR SYSTEM — exactly 4 colors, registered once as Tailwind
+     theme colors. Every class in this file (bg-ink, text-gold,
+     border-marquee, etc.) points back to this single definition.
      Theme: an old-fashioned film marquee on warm paper stock.
      ============================================================ */
-  :root {
-    --color-ink:      #1C1B19; /* near-black — body text, nav, footer bg */
-    --color-paper:    #F3ECE1; /* warm cream — page background */
-    --color-gold:     #B8892E; /* marquee gold — accents, ratings, hover states */
-    --color-marquee:  #7A2E2E; /* deep marquee red — primary CTA, active nav link */
-  }
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#0a2947", // near-black — body text, nav, footer bg
+              paper: "#f3e4c9", // warm cream — page background
+              gold: "#d3d4c0", // marquee gold — accents, ratings, secondary CTA
+              marquee: "#a97c5a", // deep marquee red — primary CTA, active nav link
+            },
+            fontFamily: {
+              display: ['"Bebas Neue"', "sans-serif"], // headings / marquee lettering
+              body: ['"Work Sans"', "sans-serif"], // body copy
+            },
+            keyframes: {
+              "spin-slow": {
+                "0%": { transform: "rotate(0deg)" },
+                "100%": { transform: "rotate(360deg)" },
+              },
+            },
+            animation: {
+              "spin-slow": "spin-slow 8s linear infinite",
+            },
+          },
+        },
+      };
+    </script>
 
-  * { box-sizing: border-box; }
+    <!-- React + ReactDOM + Babel (so we can write real JSX in-browser) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+  </head>
+  <body
+    class="m-0 bg-paper text-ink font-body leading-relaxed overflow-x-hidden"
+  >
+    <div id="root"></div>
 
-  html { scroll-behavior: smooth; } /* fallback smooth scroll; JS also handles it explicitly */
+    <script type="text/babel">
+      const { useState, useRef, useCallback } = React;
 
-  body {
-    margin: 0;
-    background: var(--color-paper);
-    color: var(--color-ink);
-    font-family: 'Work Sans', sans-serif;
-    line-height: 1.5;
-  }
-
-  h1, h2, h3, .display {
-    font-family: 'Bebas Neue', sans-serif;
-    letter-spacing: 0.04em;
-    font-weight: 400;
-    margin: 0;
-  }
-
-  a { color: inherit; }
-
-  /* ---------- Sprocket-hole strip: the site's signature motif ----------
-     A row of little "film reel" holes, used as a divider between
-     sections. Reused a few times so it feels like a running film strip
-     threading the whole page together, rather than a one-off decoration. */
-  .film-strip {
-    height: 22px;
-    background-color: var(--color-ink);
-    background-image: radial-gradient(circle, var(--color-paper) 5px, transparent 5.5px);
-    background-size: 34px 22px;
-    background-position: 17px center;
-    background-repeat: repeat-x;
-  }
-
-  /* ---------------------- NAVIGATION ---------------------- */
-  .nav {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 6vw;
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-
-  .nav-logo {
-    font-size: 26px;
-    color: var(--color-paper);
-  }
-  .nav-logo span { color: var(--color-gold); } /* the "scope" half of the wordmark */
-
-  .nav-links {
-    list-style: none;
-    display: flex;
-    gap: 28px;
-    margin: 0;
-    padding: 0;
-  }
-
-  .nav-links button {
-    background: none;
-    border: none;
-    color: var(--color-paper);
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 17px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    padding: 6px 2px;
-    border-bottom: 2px solid transparent;
-    transition: border-color 0.2s ease, color 0.2s ease;
-  }
-
-  .nav-links button:hover,
-  .nav-links button:focus-visible {
-    color: var(--color-gold);
-    border-bottom-color: var(--color-gold);
-    outline: none;
-  }
-
-  .nav-links button.active {
-    color: var(--color-marquee);
-    border-bottom-color: var(--color-marquee);
-  }
-
-  /* ---------------------- SHARED SECTION LAYOUT ---------------------- */
-  section {
-    padding: 90px 6vw;
-    max-width: 1100px;
-    margin: 0 auto;
-    scroll-margin-top: 70px; /* keeps content clear of the sticky nav when scrolled to */
-  }
-
-  .eyebrow {
-    font-family: 'Bebas Neue', sans-serif;
-    color: var(--color-marquee);
-    letter-spacing: 0.18em;
-    font-size: 14px;
-    margin-bottom: 10px;
-  }
-
-  /* ---------------------- HOME / SEARCH ---------------------- */
-  #home { padding-top: 70px; }
-
-  .hero-title {
-    font-size: clamp(48px, 9vw, 96px);
-    line-height: 0.95;
-  }
-  .hero-title span { color: var(--color-marquee); }
-
-  .hero-sub {
-    max-width: 560px;
-    margin-top: 18px;
-    color: var(--color-ink);
-    opacity: 0.75;
-    font-size: 17px;
-  }
-
-  .search-form {
-    margin-top: 40px;
-    display: flex;
-    gap: 12px;
-    max-width: 560px;
-    flex-wrap: wrap;
-  }
-
-  .search-input {
-    flex: 1 1 320px;
-    padding: 16px 18px;
-    font-size: 16px;
-    font-family: 'Work Sans', sans-serif;
-    border: 2px solid var(--color-ink);
-    background: var(--color-paper);
-    color: var(--color-ink);
-    border-radius: 2px;
-  }
-  .search-input::placeholder { color: var(--color-ink); opacity: 0.45; }
-  .search-input:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 1px; }
-
-  .search-button {
-    padding: 16px 30px;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 18px;
-    letter-spacing: 0.06em;
-    background: var(--color-marquee);
-    color: var(--color-paper);
-    border: 2px solid var(--color-marquee);
-    border-radius: 2px;
-    cursor: pointer;
-    transition: transform 0.15s ease, background 0.15s ease;
-  }
-  .search-button:hover:not(:disabled) { background: var(--color-ink); border-color: var(--color-ink); }
-  .search-button:active:not(:disabled) { transform: scale(0.97); }
-  .search-button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .status-line {
-    margin-top: 16px;
-    font-size: 14px;
-  }
-  .status-line.error { color: var(--color-marquee); font-weight: 600; }
-
-  /* ---------------------- RESULT CARD ---------------------- */
-  .result-card {
-    margin-top: 48px;
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 36px;
-    border-top: 3px solid var(--color-ink);
-    padding-top: 36px;
-  }
-
-  .poster-wrap {
-    width: 220px;
-    height: 326px;
-    background: var(--color-ink);
-    border: 6px solid var(--color-ink);
-    overflow: hidden;
-  }
-  .poster-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .poster-fallback {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--color-paper);
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 14px;
-    text-align: center;
-    padding: 10px;
-  }
-
-  .result-title { font-size: clamp(30px, 4vw, 44px); }
-  .result-meta {
-    margin-top: 6px;
-    font-size: 14px;
-    color: var(--color-ink);
-    opacity: 0.65;
-  }
-  .result-meta span:not(:last-child)::after { content: "  •  "; }
-
-  .badge-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-    flex-wrap: wrap;
-  }
-  .badge {
-    border: 2px solid var(--color-gold);
-    color: var(--color-ink);
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 2px;
-    background: rgba(184, 137, 46, 0.1); /* gold at low opacity — stays within the 4-color set */
-  }
-  .badge b { color: var(--color-marquee); }
-
-  .result-plot {
-    margin-top: 22px;
-    font-size: 15.5px;
-    max-width: 65ch;
-  }
-
-  .result-credits {
-    margin-top: 16px;
-    font-size: 13.5px;
-    opacity: 0.7;
-  }
-  .result-credits div { margin-top: 3px; }
-
-  /* ---------------------- REVIEWS ---------------------- */
-  .reviews-block { margin-top: 40px; }
-  .reviews-heading {
-    font-size: 20px;
-    letter-spacing: 0.06em;
-    border-bottom: 2px solid var(--color-ink);
-    padding-bottom: 8px;
-    margin-bottom: 18px;
-  }
-  .review-card {
-    border-left: 4px solid var(--color-gold);
-    padding: 4px 0 4px 16px;
-    margin-bottom: 18px;
-  }
-  .review-author {
-    font-family: 'Bebas Neue', sans-serif;
-    letter-spacing: 0.04em;
-    font-size: 15px;
-    color: var(--color-marquee);
-  }
-  .review-text { font-size: 14.5px; margin-top: 4px; opacity: 0.85; }
-  .reviews-empty-note {
-    font-size: 13.5px;
-    opacity: 0.6;
-    border: 1px dashed var(--color-ink);
-    padding: 14px 16px;
-  }
-
-  /* ---------------------- ABOUT ---------------------- */
-  .about-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 50px;
-    margin-top: 26px;
-  }
-  .about-copy { max-width: 50ch; font-size: 15.5px; }
-  .about-copy p { margin: 0 0 16px; }
-
-  .about-list { list-style: none; margin: 0; padding: 0; }
-  .about-list li {
-    padding: 14px 0;
-    border-top: 1px solid rgba(28,27,25,0.15);
-    font-size: 15px;
-  }
-  .about-list li:last-child { border-bottom: 1px solid rgba(28,27,25,0.15); }
-  .about-list b { color: var(--color-marquee); font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em; font-size: 15px; }
-
-  /* ---------------------- SOCIALS ---------------------- */
-  .socials-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 22px;
-    margin-top: 30px;
-  }
-
-  /* Each social link styled like a torn ticket stub */
-  .ticket {
-    position: relative;
-    display: block;
-    text-decoration: none;
-    background: var(--color-ink);
-    color: var(--color-paper);
-    padding: 26px 22px;
-    border-radius: 3px;
-    transition: transform 0.15s ease;
-  }
-  .ticket:hover { transform: translateY(-4px); }
-  .ticket::after {
-    content: "";
-    position: absolute;
-    right: 0; top: 0; bottom: 0;
-    width: 0;
-    border-left: 2px dashed var(--color-paper);
-    opacity: 0.35;
-  }
-  .ticket-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px;
-    letter-spacing: 0.05em;
-    color: var(--color-gold);
-  }
-  .ticket-handle { font-size: 13.5px; opacity: 0.75; margin-top: 4px; }
-
-  /* ---------------------- FOOTER ---------------------- */
-  footer {
-    background: var(--color-ink);
-    color: var(--color-paper);
-    text-align: center;
-    padding: 26px;
-    font-size: 13px;
-    opacity: 0.7;
-  }
-
-  @media (max-width: 720px) {
-    .nav { padding: 16px 5vw; }
-    .nav-links { gap: 16px; }
-    .result-card { grid-template-columns: 1fr; }
-    .poster-wrap { width: 160px; height: 236px; }
-    .about-grid { grid-template-columns: 1fr; }
-  }
-</style>
-</head>
-<body>
-
-<div id="root"></div>
-
-<script type="text/babel">
-const { useState, useRef, useCallback } = React;
-
-/* ============================================================
+      /* ============================================================
    API CONFIGURATION
    ------------------------------------------------------------
    OMDb (https://www.omdbapi.com) supplies poster, plot, and the
    Ratings array (IMDb / Rotten Tomatoes / Metacritic). It does NOT
-   provide written review text.
+   provide written review text, and it has no "browse by genre"
+   endpoint — only lookup by exact title (or fuzzy title search).
 
    TMDB (https://www.themoviedb.org/documentation/api) is used
-   separately, best-effort, to pull real written "top reviews" —
-   OMDb has no equivalent endpoint. If no TMDB key is supplied the
-   reviews section simply shows a friendly note instead of erroring.
+   separately, best-effort, to pull real written "top reviews".
+   If no TMDB key is supplied the reviews section simply shows a
+   friendly note instead of erroring.
 
    Get a free OMDb key at: https://www.omdbapi.com/apikey.aspx
    Get a free TMDB key at: https://www.themoviedb.org/settings/api
    ============================================================ */
-const OMDB_API_KEY = "http://www.omdbapi.com/?i=tt3896198&apikey=dadfc58";   // <-- required: paste your OMDb key here
-const TMDB_API_KEY  = "";                    // <-- optional: paste your TMDB key to enable reviews
+      const OMDB_API_KEY = "dadfc58"; // <-- required: paste your OMDb key here
+      const TMDB_API_KEY = "a0eee8b4c47d8e916a79756bff5f4588"; // <-- optional: paste your TMDB key to enable reviews
 
-const NAV_ITEMS = [
-  { id: "home", label: "Home" },
-  { id: "about", label: "About" },
-  { id: "socials", label: "Socials" },
-];
+      const NAV_ITEMS = [
+        { id: "home", label: "Home" },
+        { id: "about", label: "About" },
+        { id: "socials", label: "Socials" },
+      ];
 
-/* ---------------------- Navigation bar ----------------------
-   Clicking a link smooth-scrolls to the matching section id
-   instead of jumping there instantly. */
-function Nav({ activeSection, onNavigate }) {
-  return (
-    <nav className="nav">
-      <div className="nav-logo display">CINE<span>SCOPE</span></div>
-      <ul className="nav-links">
-        {NAV_ITEMS.map((item) => (
-          <li key={item.id}>
-            <button
-              className={activeSection === item.id ? "active" : ""}
-              onClick={() => onNavigate(item.id)}
-            >
-              {item.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
+      /* ============================================================
+   GENRE POOL for the Randomizer
+   ------------------------------------------------------------
+   Since OMDb can't be queried "by genre", we keep a small curated
+   list of well-known titles tagged with genre(s) on our side.
+   Randomize picks a random title from whichever movies match at
+   least one of the selected genres, then looks that title up via
+   the normal OMDb fetch — same code path as a typed search.
+   Feel free to expand this list with more titles/genres.
+   ============================================================ */
+      const GENRE_POOL = [
+        { title: "Mad Max: Fury Road", genres: ["Action"] },
+        { title: "Die Hard", genres: ["Action", "Thriller"] },
+        { title: "John Wick", genres: ["Action"] },
+        { title: "The Dark Knight", genres: ["Action", "Crime", "Thriller"] },
+        { title: "Gladiator", genres: ["Action", "Drama"] },
+        { title: "The Matrix", genres: ["Action", "Sci-Fi"] },
 
-/* ---------------------- Rating badges ----------------------
+        { title: "Superbad", genres: ["Comedy"] },
+        { title: "Bridesmaids", genres: ["Comedy"] },
+        { title: "The Grand Budapest Hotel", genres: ["Comedy"] },
+        { title: "Groundhog Day", genres: ["Comedy", "Fantasy"] },
+        { title: "The Hangover", genres: ["Comedy"] },
+
+        { title: "The Shawshank Redemption", genres: ["Drama"] },
+        { title: "Forrest Gump", genres: ["Drama", "Romance"] },
+        { title: "The Godfather", genres: ["Drama", "Crime"] },
+        { title: "Fight Club", genres: ["Drama", "Thriller"] },
+        { title: "Good Will Hunting", genres: ["Drama"] },
+        { title: "12 Angry Men", genres: ["Drama"] },
+
+        { title: "The Shining", genres: ["Horror"] },
+        { title: "Get Out", genres: ["Horror", "Thriller"] },
+        { title: "Hereditary", genres: ["Horror"] },
+        { title: "A Quiet Place", genres: ["Horror", "Sci-Fi"] },
+        { title: "The Conjuring", genres: ["Horror"] },
+        { title: "Psycho", genres: ["Horror", "Thriller"] },
+
+        { title: "Blade Runner 2049", genres: ["Sci-Fi", "Drama"] },
+        { title: "Interstellar", genres: ["Sci-Fi", "Drama"] },
+        { title: "Arrival", genres: ["Sci-Fi", "Drama"] },
+        { title: "Inception", genres: ["Sci-Fi", "Action"] },
+        { title: "Dune", genres: ["Sci-Fi", "Adventure"] },
+        { title: "Alien", genres: ["Sci-Fi", "Horror"] },
+
+        { title: "La La Land", genres: ["Romance"] },
+        { title: "The Notebook", genres: ["Romance", "Drama"] },
+        { title: "Pride & Prejudice", genres: ["Romance", "Drama"] },
+        {
+          title: "Eternal Sunshine of the Spotless Mind",
+          genres: ["Romance", "Sci-Fi"],
+        },
+        { title: "Before Sunrise", genres: ["Romance", "Drama"] },
+
+        { title: "Se7en", genres: ["Thriller", "Crime"] },
+        { title: "Gone Girl", genres: ["Thriller", "Drama"] },
+        { title: "Prisoners", genres: ["Thriller", "Drama"] },
+        { title: "No Country for Old Men", genres: ["Thriller", "Crime"] },
+        { title: "Parasite", genres: ["Thriller", "Drama"] },
+        {
+          title: "The Silence of the Lambs",
+          genres: ["Thriller", "Horror", "Crime"],
+        },
+
+        { title: "Spirited Away", genres: ["Animation", "Fantasy"] },
+        { title: "Toy Story", genres: ["Animation", "Comedy"] },
+        { title: "Coco", genres: ["Animation", "Fantasy"] },
+        { title: "Up", genres: ["Animation", "Drama"] },
+        {
+          title: "Spider-Man: Into the Spider-Verse",
+          genres: ["Animation", "Action"],
+        },
+        { title: "WALL-E", genres: ["Animation", "Sci-Fi"] },
+
+        {
+          title: "The Lord of the Rings: The Fellowship of the Ring",
+          genres: ["Fantasy", "Adventure"],
+        },
+        { title: "Pan's Labyrinth", genres: ["Fantasy", "Drama"] },
+        {
+          title: "Harry Potter and the Sorcerer's Stone",
+          genres: ["Fantasy", "Adventure"],
+        },
+        { title: "The Shape of Water", genres: ["Fantasy", "Romance"] },
+        {
+          title: "The Princess Bride",
+          genres: ["Fantasy", "Romance", "Comedy"],
+        },
+
+        { title: "Goodfellas", genres: ["Crime", "Drama"] },
+        { title: "Pulp Fiction", genres: ["Crime", "Drama"] },
+        { title: "The Departed", genres: ["Crime", "Thriller"] },
+        { title: "Heat", genres: ["Crime", "Action"] },
+        {
+          title: "The Wolf of Wall Street",
+          genres: ["Crime", "Comedy", "Drama"],
+        },
+      ];
+
+      // Unique, alphabetized genre list derived from the pool above — drives the chip buttons.
+      const ALL_GENRES = [
+        ...new Set(GENRE_POOL.flatMap((m) => m.genres)),
+      ].sort();
+
+    
+      function Nav({ activeSection, onNavigate }) {
+        return (
+          <nav className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 px-[5vw] py-3.5 sm:px-[6vw] sm:py-[18px] bg-ink text-paper">
+            <div className="font-display text-[22px] sm:text-[26px] text-paper">
+              Movi<span className="text-gold">Explorer</span>
+            </div>
+            <ul className="flex flex-wrap list-none gap-x-4 gap-y-2 sm:gap-x-[22px] m-0 p-0">
+              {NAV_ITEMS.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => onNavigate(item.id)}
+                    className={
+                      "bg-transparent border-0 border-b-2 font-display text-[15px] sm:text-[17px] tracking-[0.08em] cursor-pointer py-1.5 px-0.5 transition-colors duration-200 " +
+                      (activeSection === item.id
+                        ? "text-marquee border-marquee"
+                        : "text-paper border-transparent hover:text-gold hover:border-gold")
+                    }
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        );
+      }
+
+      /* ---------------------- Rating badges ----------------------
    OMDb returns a "Ratings" array like:
    [{ Source: "Internet Movie Database", Value: "8.8/10" }, ...]
    We map the known sources to short labels for display. */
-function RatingBadges({ ratings }) {
-  if (!ratings || ratings.length === 0) return null;
-  const shortLabel = (source) => {
-    if (source.includes("Internet Movie")) return "IMDb";
-    if (source.includes("Rotten")) return "Rotten Tomatoes";
-    if (source.includes("Metacritic")) return "Metacritic";
-    return source;
-  };
-  return (
-    <div className="badge-row">
-      {ratings.map((r) => (
-        <div className="badge" key={r.Source}>
-          {shortLabel(r.Source)}: <b>{r.Value}</b>
-        </div>
-      ))}
-    </div>
-  );
-}
+      function RatingBadges({ ratings }) {
+        if (!ratings || ratings.length === 0) return null;
+        const shortLabel = (source) => {
+          if (source.includes("Internet Movie")) return "IMDb";
+          if (source.includes("Rotten")) return "Rotten Tomatoes";
+          if (source.includes("Metacritic")) return "Metacritic";
+          return source;
+        };
+        return (
+          <div className="flex flex-wrap gap-2.5 mt-5">
+            {ratings.map((r) => (
+              <div
+                key={r.Source}
+                className="border-2 border-gold text-ink px-3 py-1.5 text-[13px] font-semibold rounded-sm bg-gold/10"
+              >
+                {shortLabel(r.Source)}:{" "}
+                <b className="text-marquee">{r.Value}</b>
+              </div>
+            ))}
+          </div>
+        );
+      }
 
-/* ---------------------- Reviews block ----------------------
+      /* ---------------------- Reviews block ----------------------
    Best-effort fetch from TMDB. Shows up to 3 reviews, trimmed
    to a readable length. Falls back to a plain note if no TMDB
    key is configured or none are found. */
-function ReviewsBlock({ reviews, reviewsLoading }) {
-  return (
-    <div className="reviews-block">
-      <div className="reviews-heading display">TOP REVIEWS</div>
-      {reviewsLoading && <p className="status-line">Fetching reviews…</p>}
-      {!reviewsLoading && reviews.length === 0 && (
-        <div className="reviews-empty-note">
-          No written reviews to show yet. Add a TMDB API key in the code
-          (TMDB_API_KEY) to pull in real audience reviews for this title.
-        </div>
-      )}
-      {!reviewsLoading &&
-        reviews.slice(0, 3).map((rev, i) => (
-          <div className="review-card" key={i}>
-            <div className="review-author">{rev.author}</div>
-            <div className="review-text">
-              {rev.content.length > 320
-                ? rev.content.slice(0, 320).trim() + "…"
-                : rev.content}
+      function ReviewsBlock({ reviews, reviewsLoading }) {
+        return (
+          <div className="mt-10">
+            <div className="font-display text-xl tracking-[0.06em] border-b-2 border-ink pb-2 mb-[18px]">
+              TOP REVIEWS
             </div>
-          </div>
-        ))}
-    </div>
-  );
-}
-
-/* ---------------------- Home / search section ---------------------- */
-function HomeSection({ sectionRef }) {
-  const [query, setQuery] = useState("");
-  const [movie, setMovie] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [reviews, setReviews] = useState([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-
-  // Pulls poster / ratings / plot / credits from OMDb by exact title
-  const fetchMovie = async (title) => {
-    const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}&plot=full`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.Response === "False") {
-      throw new Error(data.Error || "Movie not found.");
-    }
-    return data;
-  };
-
-  // Best-effort: TMDB search-by-title -> reviews-by-id. Silently no-ops
-  // (empty array) if no key is set or nothing is found.
-  const fetchReviews = async (title) => {
-    if (!TMDB_API_KEY) return [];
-    try {
-      const searchRes = await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
-      );
-      const searchData = await searchRes.json();
-      const first = searchData.results && searchData.results[0];
-      if (!first) return [];
-      const reviewRes = await fetch(
-        `https://api.themoviedb.org/3/movie/${first.id}/reviews?api_key=${TMDB_API_KEY}`
-      );
-      const reviewData = await reviewRes.json();
-      return reviewData.results || [];
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setLoading(true);
-    setError("");
-    setMovie(null);
-    setReviews([]);
-
-    try {
-      const data = await fetchMovie(query.trim());
-      setMovie(data);
-      setReviewsLoading(true);
-      const revs = await fetchReviews(query.trim());
-      setReviews(revs);
-    } catch (err) {
-      setError(err.message || "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-      setReviewsLoading(false);
-    }
-  };
-
-  return (
-    <section id="home" ref={sectionRef}>
-      <div className="eyebrow">NOW SEARCHING</div>
-      <h1 className="hero-title">FIND ANY <span>MOVIE.</span></h1>
-      <p className="hero-sub">
-        Type in a title to pull its poster, ratings, synopsis, and top
-        reviews — all in one place.
-      </p>
-
-      <form className="search-form" onSubmit={handleSubmit}>
-        <input
-          className="search-input"
-          type="text"
-          placeholder="e.g. The Godfather"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Movie title"
-        />
-        <button className="search-button" type="submit" disabled={loading}>
-          {loading ? "Searching…" : "Submit"}
-        </button>
-      </form>
-
-      {error && <p className="status-line error">{error}</p>}
-      {OMDB_API_KEY === "YOUR_OMDB_API_KEY" && (
-        <p className="status-line">
-          Note: add your free OMDb API key to the OMDB_API_KEY constant in
-          the code before searching.
-        </p>
-      )}
-
-      {movie && (
-        <div className="result-card">
-          <div className="poster-wrap">
-            {movie.Poster && movie.Poster !== "N/A" ? (
-              <img src={movie.Poster} alt={`${movie.Title} poster`} />
-            ) : (
-              <div className="poster-fallback">NO POSTER AVAILABLE</div>
+            {reviewsLoading && (
+              <p className="mt-4 text-sm">Fetching reviews…</p>
             )}
+            {!reviewsLoading && reviews.length === 0 && (
+              <div className="text-[13.5px] text-ink/60 border border-dashed border-ink px-4 py-3.5">
+                No written reviews to show yet. Add a TMDB API key in the code
+                (TMDB_API_KEY) to pull in real audience reviews for this title.
+              </div>
+            )}
+            {!reviewsLoading &&
+              reviews.slice(0, 3).map((rev, i) => (
+                <div
+                  key={i}
+                  className="border-l-4 border-gold pl-4 py-1 mb-[18px]"
+                >
+                  <div className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    {rev.author}
+                  </div>
+                  <div className="text-[14.5px] mt-1 text-ink/85">
+                    {rev.content.length > 320
+                      ? rev.content.slice(0, 320).trim() + "…"
+                      : rev.content}
+                  </div>
+                </div>
+              ))}
           </div>
+        );
+      }
 
-          <div>
-            <h2 className="result-title display">{movie.Title}</h2>
-            <div className="result-meta">
-              <span>{movie.Year}</span>
-              <span>{movie.Runtime}</span>
-              <span>{movie.Genre}</span>
-              <span>{movie.Rated}</span>
+      /* ---------------------- Genre randomizer sub-section ----------------------
+   Toggleable genre chips + a "Randomize" button. Picks a random title
+   from GENRE_POOL that matches at least one selected genre, then hands
+   that title off to the shared loadMovie() function so the result
+   renders in the same card as a typed search. */
+      function GenreRandomizer({
+        selectedGenres,
+        onToggleGenre,
+        onRandomize,
+        disabled,
+      }) {
+        return (
+          <div className="mt-14 pt-10 border-t-[3px] border-ink max-w-[640px]">
+            <div className="font-display text-marquee tracking-[0.18em] text-sm mb-2.5">
+              FEELING UNDECIDED?
             </div>
-
-            <RatingBadges ratings={movie.Ratings} />
-
-            <p className="result-plot">{movie.Plot}</p>
-
-            <div className="result-credits">
-              <div><strong>Director:</strong> {movie.Director}</div>
-              <div><strong>Cast:</strong> {movie.Actors}</div>
+            <h3 className="font-display text-[clamp(24px,4vw,34px)] leading-[0.95]">
+              PICK A GENRE, LET US CHOOSE
+            </h3>
+            <div
+              className="flex flex-wrap gap-2.5 mt-[18px]"
+              role="group"
+              aria-label="Select genres"
+            >
+              {ALL_GENRES.map((genre) => (
+                <button
+                  key={genre}
+                  type="button"
+                  aria-pressed={selectedGenres.includes(genre)}
+                  onClick={() => onToggleGenre(genre)}
+                  className={
+                    "px-4 py-2.5 text-[13px] sm:text-sm font-semibold border-2 rounded-full cursor-pointer transition-colors duration-150 " +
+                    (selectedGenres.includes(genre)
+                      ? "bg-marquee border-marquee text-paper"
+                      : "bg-transparent border-ink text-ink hover:border-gold")
+                  }
+                >
+                  {genre}
+                </button>
+              ))}
             </div>
-
-            <ReviewsBlock reviews={reviews} reviewsLoading={reviewsLoading} />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-wrap mt-[22px]">
+              <button
+                onClick={onRandomize}
+                disabled={disabled || selectedGenres.length === 0}
+                className="w-full sm:w-auto shrink-0 px-[30px] py-4 font-display text-lg tracking-[0.06em] bg-transparent text-ink border-2 border-gold rounded-sm cursor-pointer transition-all duration-150 hover:bg-gold active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Randomize
+              </button>
+              {selectedGenres.length === 0 && (
+                <span className="text-sm">
+                  Select at least one genre first.
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </section>
-  );
-}
+        );
+      }
 
-/* ---------------------- About section ---------------------- */
-function AboutSection({ sectionRef }) {
-  return (
-    <section id="about" ref={sectionRef}>
-      <div className="eyebrow">ABOUT THE PROJECT</div>
-      <h2 className="hero-title" style={{ fontSize: "clamp(34px, 5vw, 56px)" }}>
-        WHAT CINESCOPE DOES
-      </h2>
-      <div className="about-grid">
-        <div className="about-copy">
-          <p>
-            Cinescope is a single-purpose lookup tool: type a movie title,
-            and it gathers the poster, the plot, critic ratings, and a
-            handful of written reviews so you don't have to open five tabs
-            to decide what to watch.
-          </p>
-          <p>
-            Movie data and ratings come from OMDb. Written audience reviews,
-            when available, come from TMDB. Nothing is stored — every search
-            is a fresh request straight to those sources.
-          </p>
-        </div>
-        <ul className="about-list">
-          <li><b>POSTER</b> — official artwork for the title, pulled from OMDb.</li>
-          <li><b>RATINGS</b> — IMDb, Rotten Tomatoes, and Metacritic scores side by side.</li>
-          <li><b>SYNOPSIS</b> — full plot description, not just a one-liner.</li>
-          <li><b>REVIEWS</b> — real written reviews, sourced from TMDB.</li>
-        </ul>
-      </div>
-    </section>
-  );
-}
+      /* ---------------------- Home / search section ---------------------- */
+      function HomeSection({ sectionRef }) {
+        const [query, setQuery] = useState("");
+        const [movie, setMovie] = useState(null);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState("");
+        const [reviews, setReviews] = useState([]);
+        const [reviewsLoading, setReviewsLoading] = useState(false);
+        const [selectedGenres, setSelectedGenres] = useState([]);
 
-/* ---------------------- Socials section ---------------------- */
-function SocialsSection({ sectionRef }) {
-  // Replace these href values with real profile links.
-  const links = [
-    { label: "GitHub", handle: "@yourusername", href: "https://github.com/" },
-    { label: "X / Twitter", handle: "@yourusername", href: "https://x.com/" },
-    { label: "LinkedIn", handle: "/in/yourusername", href: "https://linkedin.com/" },
-  ];
-  return (
-    <section id="socials" ref={sectionRef}>
-      <div className="eyebrow">FIND US ELSEWHERE</div>
-      <h2 className="hero-title" style={{ fontSize: "clamp(34px, 5vw, 56px)" }}>
-        SOCIALS
-      </h2>
-      <div className="socials-grid">
-        {links.map((l) => (
-          <a className="ticket" href={l.href} key={l.label} target="_blank" rel="noreferrer">
-            <div className="ticket-label display">{l.label}</div>
-            <div className="ticket-handle">{l.handle}</div>
-          </a>
-        ))}
-      </div>
-    </section>
-  );
-}
+        // Pulls poster / ratings / plot / credits from OMDb by exact title
+        const fetchMovie = async (title) => {
+          const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}&plot=full`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.Response === "False") {
+            throw new Error(data.Error || "Movie not found.");
+          }
+          return data;
+        };
 
-/* ---------------------- Root App ---------------------- */
-function App() {
-  const [activeSection, setActiveSection] = useState("home");
-  const homeRef = useRef(null);
-  const aboutRef = useRef(null);
-  const socialsRef = useRef(null);
+        // Best-effort: TMDB search-by-title -> reviews-by-id. Silently no-ops
+        // (empty array) if no key is set or nothing is found.
+        const fetchReviews = async (title) => {
+          if (!TMDB_API_KEY) return [];
+          try {
+            const searchRes = await fetch(
+              `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`,
+            );
+            const searchData = await searchRes.json();
+            const first = searchData.results && searchData.results[0];
+            if (!first) return [];
+            const reviewRes = await fetch(
+              `https://api.themoviedb.org/3/movie/${first.id}/reviews?api_key=${TMDB_API_KEY}`,
+            );
+            const reviewData = await reviewRes.json();
+            return reviewData.results || [];
+          } catch (e) {
+            return [];
+          }
+        };
 
-  const refs = { home: homeRef, about: aboutRef, socials: socialsRef };
+        // Shared loader used by both the typed search and the Randomize button,
+        // so both paths land in the exact same result card + reviews block.
+        const loadMovie = async (title) => {
+          setLoading(true);
+          setError("");
+          setMovie(null);
+          setReviews([]);
 
-  // Smooth-scrolls to the target section when a nav link is clicked
-  const handleNavigate = useCallback((id) => {
-    setActiveSection(id);
-    refs[id].current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+          try {
+            const data = await fetchMovie(title);
+            setMovie(data);
+            setReviewsLoading(true);
+            const revs = await fetchReviews(title);
+            setReviews(revs);
+          } catch (err) {
+            setError(err.message || "Something went wrong. Please try again.");
+          } finally {
+            setLoading(false);
+            setReviewsLoading(false);
+          }
+        };
 
-  return (
-    <React.Fragment>
-      <Nav activeSection={activeSection} onNavigate={handleNavigate} />
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          if (!query.trim()) return;
+          loadMovie(query.trim());
+        };
 
-      <HomeSection sectionRef={homeRef} />
-      <div className="film-strip"></div>
+        const toggleGenre = (genre) => {
+          setSelectedGenres((prev) =>
+            prev.includes(genre)
+              ? prev.filter((g) => g !== genre)
+              : [...prev, genre],
+          );
+        };
 
-      <AboutSection sectionRef={aboutRef} />
-      <div className="film-strip"></div>
+        const handleRandomize = () => {
+          // Union match: a movie qualifies if it has ANY of the selected genres.
+          const matches = GENRE_POOL.filter((m) =>
+            m.genres.some((g) => selectedGenres.includes(g)),
+          );
+          if (matches.length === 0) {
+            setError(
+              "No movies found for that genre combination — try another.",
+            );
+            return;
+          }
+          const pick = matches[Math.floor(Math.random() * matches.length)];
+          setQuery(pick.title); // keeps the search box in sync with what's shown
+          loadMovie(pick.title);
+        };
 
-      <SocialsSection sectionRef={socialsRef} />
+        // Builds the "2024  •  142 min  •  Drama  •  R" meta line, skipping
+        // any fields OMDb didn't return (e.g. "N/A").
+        const metaLine = movie
+          ? [movie.Year, movie.Runtime, movie.Genre, movie.Rated]
+              .filter((v) => v && v !== "N/A")
+              .join("   •   ")
+          : "";
 
-      <footer>Cinescope — built with React. Movie data via OMDb, reviews via TMDB.</footer>
-    </React.Fragment>
-  );
-}
+        return (
+          <section
+            id="home"
+            ref={sectionRef}
+            className="relative px-[6vw] max-w-[1100px] mx-auto scroll-mt-[70px] pt-[50px] sm:pt-[60px] md:pt-[70px] pb-14 sm:pb-[70px] md:pb-[90px]"
+          >
+            <img
+              src="film-reel.png"
+              alt="Film reel"
+              className="hidden lg:block absolute right-[0vw] top-2/6 -translate-y-1/2 w-64 h-64 xl:w-80 xl:h-80 animate-spin-slow pointer-events-none select-none"
+            />
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
-</body>
+            <div className="font-display text-marquee tracking-[0.18em] text-sm mb-2.5">
+              NOW SEARCHING
+            </div>
+            <h1 className="font-display text-[clamp(40px,9vw,96px)] leading-[0.95]">
+              FIND ANY <span className="text-marquee">MOVIE.</span>
+            </h1>
+            <p className="max-w-[560px] mt-[18px] text-ink/75 text-[17px]">
+              Type in a title to pull its poster, ratings, synopsis, and top
+              reviews — all in one place.
+            </p>
+
+            <form
+              onSubmit={handleSubmit}
+              className="mt-10 flex flex-col sm:flex-row gap-3 max-w-[560px]"
+            >
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. The Godfather"
+                aria-label="Movie title"
+                className="flex-1 min-w-0 w-full px-[18px] py-4 text-base font-body border-2 border-ink bg-paper text-ink rounded-sm placeholder:text-ink/45 focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-gold focus-visible:outline-offset-1"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full sm:w-auto shrink-0 px-[30px] py-4 font-display text-lg tracking-[0.06em] bg-marquee text-paper border-2 border-marquee rounded-sm cursor-pointer transition-transform duration-150 hover:bg-ink hover:border-ink active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Searching…" : "Submit"}
+              </button>
+            </form>
+
+            <GenreRandomizer
+              selectedGenres={selectedGenres}
+              onToggleGenre={toggleGenre}
+              onRandomize={handleRandomize}
+              disabled={loading}
+            />
+
+            {error && (
+              <p className="mt-4 text-sm text-marquee font-semibold">{error}</p>
+            )}
+            {OMDB_API_KEY === "YOUR_OMDB_API_KEY" && (
+              <p className="mt-4 text-sm">
+                Note: add your free OMDb API key to the OMDB_API_KEY constant in
+                the code before searching.
+              </p>
+            )}
+
+            {movie && (
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-[220px_1fr] gap-9 border-t-[3px] border-ink pt-9">
+                <div className="w-[170px] h-[252px] sm:w-[220px] sm:h-[326px] bg-ink border-[6px] border-ink overflow-hidden mx-auto md:mx-0">
+                  {movie.Poster && movie.Poster !== "N/A" ? (
+                    <img
+                      src={movie.Poster}
+                      alt={`${movie.Title} poster`}
+                      className="w-full h-full object-cover block"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-paper font-display text-sm text-center p-2.5">
+                      NO POSTER AVAILABLE
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h2 className="font-display text-[clamp(28px,4vw,44px)]">
+                    {movie.Title}
+                  </h2>
+                  <div className="mt-1.5 text-sm text-ink/65">{metaLine}</div>
+
+                  <RatingBadges ratings={movie.Ratings} />
+
+                  <p className="mt-[22px] text-[15.5px] max-w-[65ch]">
+                    {movie.Plot}
+                  </p>
+
+                  <div className="mt-4 text-[13.5px] text-ink/70 space-y-1">
+                    <div>
+                      <strong>Director:</strong> {movie.Director}
+                    </div>
+                    <div>
+                      <strong>Cast:</strong> {movie.Actors}
+                    </div>
+                  </div>
+
+                  <ReviewsBlock
+                    reviews={reviews}
+                    reviewsLoading={reviewsLoading}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      }
+
+      /* ---------------------- About section ---------------------- */
+      function AboutSection({ sectionRef }) {
+        return (
+          <section
+            id="about"
+            ref={sectionRef}
+            className="px-[6vw] py-14 sm:py-[70px] md:py-[90px] max-w-[1100px] mx-auto scroll-mt-[70px]"
+          >
+            <div className="font-display text-marquee tracking-[0.18em] text-sm mb-2.5">
+              ABOUT THE PROJECT
+            </div>
+            <h2 className="font-display text-[clamp(34px,5vw,56px)] leading-[0.95]">
+              WHAT MOVIEXPLORER DOES
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-[34px] md:gap-[50px] mt-[26px]">
+              <div className="max-w-[50ch] text-[15.5px] space-y-4">
+                <p>
+                  MOVIEXPLORER is a single-purpose lookup tool: type a movie
+                  title, or pick some genres and let it choose for you, and it
+                  gathers the poster, the plot, critic ratings, and a handful of
+                  written reviews so you don't have to open five tabs to decide
+                  what to watch.
+                </p>
+                <p>
+                  Movie data and ratings come from OMDb. Written audience
+                  reviews, when available, come from TMDB. The genre randomizer
+                  draws from a small curated title list, since OMDb itself has
+                  no genre browse endpoint. Nothing is stored — every search is
+                  a fresh request straight to those sources.
+                </p>
+              </div>
+              <ul className="list-none m-0 p-0">
+                <li className="py-3.5 border-t border-ink/15 text-[15px]">
+                  <b className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    POSTER
+                  </b>{" "}
+                  — official artwork for the title, pulled from OMDb.
+                </li>
+                <li className="py-3.5 border-t border-ink/15 text-[15px]">
+                  <b className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    RATINGS
+                  </b>{" "}
+                  — IMDb, Rotten Tomatoes, and Metacritic scores side by side.
+                </li>
+                <li className="py-3.5 border-t border-ink/15 text-[15px]">
+                  <b className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    SYNOPSIS
+                  </b>{" "}
+                  — full plot description, not just a one-liner.
+                </li>
+                <li className="py-3.5 border-t border-ink/15 text-[15px]">
+                  <b className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    REVIEWS
+                  </b>{" "}
+                  — real written reviews, sourced from TMDB.
+                </li>
+                <li className="py-3.5 border-t border-b border-ink/15 text-[15px]">
+                  <b className="font-display tracking-[0.04em] text-[15px] text-marquee">
+                    RANDOMIZE
+                  </b>{" "}
+                  — pick genres, get a random matching title.
+                </li>
+              </ul>
+            </div>
+          </section>
+        );
+      }
+
+      /* ---------------------- Socials section ---------------------- */
+      function SocialsSection({ sectionRef }) {
+        // Replace these href values with real profile links.
+        const links = [
+          {
+            label: "GitHub",
+            handle: "@yourusername",
+            href: "https://github.com/",
+          },
+          {
+            label: "X / Twitter",
+            handle: "@yourusername",
+            href: "https://x.com/",
+          },
+          {
+            label: "LinkedIn",
+            handle: "/in/yourusername",
+            href: "https://linkedin.com/",
+          },
+        ];
+        return (
+          <section
+            id="socials"
+            ref={sectionRef}
+            className="px-[6vw] py-14 sm:py-[70px] md:py-[90px] max-w-[1100px] mx-auto scroll-mt-[70px]"
+          >
+            <div className="font-display text-marquee tracking-[0.18em] text-sm mb-2.5">
+              FIND US ELSEWHERE
+            </div>
+            <h2 className="font-display text-[clamp(34px,5vw,56px)] leading-[0.95]">
+              SOCIALS
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-[22px] mt-[30px]">
+              {links.map((l) => (
+                <a
+                  key={l.label}
+                  href={l.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="relative block no-underline bg-ink text-paper px-[18px] sm:px-[22px] py-[22px] sm:py-[26px] rounded-[3px] transition-transform duration-150 hover:-translate-y-1 after:content-[''] after:absolute after:right-0 after:top-0 after:bottom-0 after:w-0 after:border-l-2 after:border-dashed after:border-paper after:opacity-35"
+                >
+                  <div className="font-display text-[22px] tracking-[0.05em] text-gold">
+                    {l.label}
+                  </div>
+                  <div className="text-[13.5px] text-paper/75 mt-1">
+                    {l.handle}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      /* ---------------------- Root App ---------------------- */
+      function App() {
+        const [activeSection, setActiveSection] = useState("home");
+        const homeRef = useRef(null);
+        const aboutRef = useRef(null);
+        const socialsRef = useRef(null);
+
+        const refs = { home: homeRef, about: aboutRef, socials: socialsRef };
+
+        // Smooth-scrolls to the target section when a nav link is clicked
+        const handleNavigate = useCallback((id) => {
+          setActiveSection(id);
+          refs[id].current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }, []);
+
+        return (
+          <React.Fragment>
+            <Nav activeSection={activeSection} onNavigate={handleNavigate} />
+
+            <HomeSection sectionRef={homeRef} />
+            {/* Sprocket-hole film strip — the site's signature divider motif,
+          reused between sections so it feels like one strip of film
+          threading the whole page together. */}
+            <div className="h-[22px] bg-ink bg-[radial-gradient(circle,#F3ECE1_5px,transparent_5.5px)] bg-[length:34px_22px] bg-[position:17px_center] bg-repeat-x" />
+
+            <AboutSection sectionRef={aboutRef} />
+            <div className="h-[22px] bg-ink bg-[radial-gradient(circle,#F3ECE1_5px,transparent_5.5px)] bg-[length:34px_22px] bg-[position:17px_center] bg-repeat-x" />
+
+            <SocialsSection sectionRef={socialsRef} />
+
+            <footer className="bg-ink text-paper text-center py-[26px] text-[13px]">
+              <span className="text-paper/70">
+                MOVIEXPLORER — built with React. Movie data via OMDb, reviews
+                via TMDB.
+              </span>
+            </footer>
+          </React.Fragment>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
 </html>
